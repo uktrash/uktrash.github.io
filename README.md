@@ -71,11 +71,3 @@ make bench
 ```
 
 Measured response notes live in `LATENCY.md`.
-
-## Suggested GitHub Setup
-
-1. Push this repo.
-2. In GitHub, open `Settings -> Pages`.
-3. Under `Build and deployment`, set the source to `Deploy from a branch`.
-4. Choose branch `main` and folder `/docs`.
-5. Later, point your custom domain at your dedicated server when you are ready to move off Pages.
