@@ -7,6 +7,8 @@ EXPORT_DIR ?= docs
 ROOT_EXPORT ?= index.html
 FAVICON_SRC := assets/flopper.png
 FAVICON_NAME := flopper.png
+FONT_SRC_DIR := assets/fonts
+FONT_EXPORT_DIR := fonts
 
 CPPFLAGS := -D_POSIX_C_SOURCE=200809L
 CFLAGS ?= -std=c11 -O3 -pipe -flto -Wall -Wextra -Wpedantic -Wshadow -Wconversion -DNDEBUG
@@ -29,11 +31,13 @@ run: $(BIN)
 	./$(BIN)
 
 export: $(BIN)
-	mkdir -p $(EXPORT_DIR)
+	mkdir -p $(EXPORT_DIR) $(EXPORT_DIR)/$(FONT_EXPORT_DIR) $(FONT_EXPORT_DIR)
 	./$(BIN) --export $(EXPORT_DIR)/index.html
 	cp $(EXPORT_DIR)/index.html $(ROOT_EXPORT)
 	cp $(FAVICON_SRC) $(EXPORT_DIR)/$(FAVICON_NAME)
 	cp $(FAVICON_SRC) $(FAVICON_NAME)
+	cp $(FONT_SRC_DIR)/*.ttf $(EXPORT_DIR)/$(FONT_EXPORT_DIR)/
+	cp $(FONT_SRC_DIR)/*.ttf $(FONT_EXPORT_DIR)/
 	touch $(EXPORT_DIR)/.nojekyll .nojekyll
 
 pages: export
@@ -45,4 +49,4 @@ bench: $(BIN) $(BENCH_BIN)
 	./scripts/bench.sh
 
 clean:
-	rm -rf build dist docs index.html .nojekyll $(FAVICON_NAME)
+	rm -rf build dist docs index.html .nojekyll $(FAVICON_NAME) $(FONT_EXPORT_DIR)
