@@ -39,6 +39,14 @@ struct client {
   enum client_state state;
 };
 
+struct static_asset {
+  const char *path;
+  const char *source_path;
+  const char *content_type;
+  char *response;
+  size_t response_len;
+};
+
 static const char NOT_FOUND[] =
     "HTTP/1.1 404 Not Found\r\n"
     "Content-Type: text/plain; charset=utf-8\r\n"
@@ -65,6 +73,17 @@ static const char BAD_REQUEST[] =
     "Content-Length: 12\r\n"
     "\r\n"
     "bad request\n";
+
+static struct static_asset ASSETS[] = {
+    {"/flopper.png", "assets/flopper.png", "image/png", NULL, 0},
+    {"/fonts/bodoni-moda-400.ttf", "assets/fonts/bodoni-moda-400.ttf", "font/ttf", NULL, 0},
+    {"/fonts/bodoni-moda-500.ttf", "assets/fonts/bodoni-moda-500.ttf", "font/ttf", NULL, 0},
+    {"/fonts/bodoni-moda-600.ttf", "assets/fonts/bodoni-moda-600.ttf", "font/ttf", NULL, 0},
+    {"/fonts/ibm-plex-mono-400.ttf", "assets/fonts/ibm-plex-mono-400.ttf", "font/ttf", NULL, 0},
+    {"/fonts/ibm-plex-mono-500.ttf", "assets/fonts/ibm-plex-mono-500.ttf", "font/ttf", NULL, 0},
+};
+
+static const size_t ASSET_COUNT = sizeof(ASSETS) / sizeof(ASSETS[0]);
 
 static void on_sigint(int sig) {
   (void)sig;
@@ -140,8 +159,141 @@ static void assign_response(struct client *client, const char *resp, size_t len)
   client->state = CLIENT_WRITING;
 }
 
+static int read_file_bytes(const char *path, unsigned char **data_out, size_t *len_out) {
+  FILE *f = fopen(path, "rb");
+  if (f == NULL) {
+    perror(path);
+    return 1;
+  }
+
+  if (fseek(f, 0, SEEK_END) != 0) {
+    perror("fseek");
+    fclose(f);
+    return 1;
+  }
+
+  long end = ftell(f);
+  if (end < 0) {
+    perror("ftell");
+    fclose(f);
+    return 1;
+  }
+
+  if (fseek(f, 0, SEEK_SET) != 0) {
+    perror("fseek");
+    fclose(f);
+    return 1;
+  }
+
+  size_t len = (size_t)end;
+  unsigned char *data = malloc(len == 0 ? 1U : len);
+  if (data == NULL) {
+    perror("malloc");
+    fclose(f);
+    return 1;
+  }
+
+  if (len > 0 && fread(data, 1, len, f) != len) {
+    perror("fread");
+    free(data);
+    fclose(f);
+    return 1;
+  }
+
+  if (fclose(f) != 0) {
+    perror("fclose");
+    free(data);
+    return 1;
+  }
+
+  *data_out = data;
+  *len_out = len;
+  return 0;
+}
+
+static int load_asset(struct static_asset *asset) {
+  unsigned char *body = NULL;
+  size_t body_len = 0;
+  if (read_file_bytes(asset->source_path, &body, &body_len) != 0) {
+    return 1;
+  }
+
+  int header_len = snprintf(
+      NULL, 0,
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: %s\r\n"
+      "Cache-Control: public, max-age=31536000, immutable\r\n"
+      "Connection: close\r\n"
+      "Server: c-portfolio/1\r\n"
+      "Content-Length: %zu\r\n"
+      "\r\n",
+      asset->content_type, body_len);
+
+  if (header_len <= 0) {
+    fprintf(stderr, "failed to build asset header for %s\n", asset->path);
+    free(body);
+    return 1;
+  }
+
+  size_t header_cap = (size_t)header_len + 1U;
+  char *response = malloc(header_cap + body_len);
+  if (response == NULL) {
+    perror("malloc");
+    free(body);
+    return 1;
+  }
+
+  (void)snprintf(
+      response, header_cap,
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: %s\r\n"
+      "Cache-Control: public, max-age=31536000, immutable\r\n"
+      "Connection: close\r\n"
+      "Server: c-portfolio/1\r\n"
+      "Content-Length: %zu\r\n"
+      "\r\n",
+      asset->content_type, body_len);
+  if (body_len > 0) {
+    memcpy(response + (size_t)header_len, body, body_len);
+  }
+
+  free(body);
+  asset->response = response;
+  asset->response_len = (size_t)header_len + body_len;
+  return 0;
+}
+
+static int load_assets(struct static_asset *assets, size_t asset_count) {
+  for (size_t i = 0; i < asset_count; ++i) {
+    if (load_asset(&assets[i]) != 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void free_assets(struct static_asset *assets, size_t asset_count) {
+  for (size_t i = 0; i < asset_count; ++i) {
+    free(assets[i].response);
+    assets[i].response = NULL;
+    assets[i].response_len = 0;
+  }
+}
+
+static const struct static_asset *find_asset(const char *path,
+                                             const struct static_asset *assets,
+                                             size_t asset_count) {
+  for (size_t i = 0; i < asset_count; ++i) {
+    if (strcmp(path, assets[i].path) == 0) {
+      return &assets[i];
+    }
+  }
+  return NULL;
+}
+
 static void choose_response(struct client *client, const char *ok_response,
-                            size_t ok_len) {
+                            size_t ok_len, const struct static_asset *assets,
+                            size_t asset_count) {
   char method[16];
   char path[256];
 
@@ -166,11 +318,18 @@ static void choose_response(struct client *client, const char *ok_response,
     return;
   }
 
+  const struct static_asset *asset = find_asset(path, assets, asset_count);
+  if (asset != NULL && asset->response != NULL) {
+    assign_response(client, asset->response, asset->response_len);
+    return;
+  }
+
   assign_response(client, NOT_FOUND, sizeof(NOT_FOUND) - 1U);
 }
 
 static int read_client(struct client *client, const char *ok_response,
-                       size_t ok_len) {
+                       size_t ok_len, const struct static_asset *assets,
+                       size_t asset_count) {
   for (;;) {
     if (client->req_len >= sizeof(client->req) - 1U) {
       assign_response(client, BAD_REQUEST, sizeof(BAD_REQUEST) - 1U);
@@ -197,7 +356,7 @@ static int read_client(struct client *client, const char *ok_response,
     client->req[client->req_len] = '\0';
 
     if (request_ready(client->req, client->req_len)) {
-      choose_response(client, ok_response, ok_len);
+      choose_response(client, ok_response, ok_len, assets, asset_count);
       return 0;
     }
   }
@@ -224,7 +383,8 @@ static int flush_client(struct client *client) {
   return 1;
 }
 
-static int serve(uint16_t port, const char *ok_response, size_t ok_len) {
+static int serve(uint16_t port, const char *ok_response, size_t ok_len,
+                 const struct static_asset *assets, size_t asset_count) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     perror("socket");
@@ -351,7 +511,7 @@ static int serve(uint16_t port, const char *ok_response, size_t ok_len) {
       }
 
       if (client->state == CLIENT_READING && (revents & POLLIN) != 0) {
-        if (read_client(client, ok_response, ok_len) != 0) {
+        if (read_client(client, ok_response, ok_len, assets, asset_count) != 0) {
           close_client(client);
           continue;
         }
@@ -440,6 +600,11 @@ int main(int argc, char **argv) {
     return export_html(argv[2], html, html_len);
   }
 
+  if (load_assets(ASSETS, ASSET_COUNT) != 0) {
+    free_assets(ASSETS, ASSET_COUNT);
+    return 1;
+  }
+
   uint16_t port = DEFAULT_PORT;
   if (argc >= 2 && strcmp(argv[1], "--port") == 0 && argc >= 3) {
     long p = strtol(argv[2], NULL, 10);
@@ -450,5 +615,7 @@ int main(int argc, char **argv) {
     port = (uint16_t)p;
   }
 
-  return serve(port, response, ok_len);
+  int status = serve(port, response, ok_len, ASSETS, ASSET_COUNT);
+  free_assets(ASSETS, ASSET_COUNT);
+  return status;
 }
