@@ -79,6 +79,8 @@ static struct static_asset ASSETS[] = {
     {"/fonts/bodoni-moda-400.ttf", "assets/fonts/bodoni-moda-400.ttf", "font/ttf", NULL, 0},
     {"/fonts/bodoni-moda-500.ttf", "assets/fonts/bodoni-moda-500.ttf", "font/ttf", NULL, 0},
     {"/fonts/bodoni-moda-600.ttf", "assets/fonts/bodoni-moda-600.ttf", "font/ttf", NULL, 0},
+    {"/fonts/mono-mu-400.ttf", "assets/fonts/mono-mu-400.ttf", "font/ttf", NULL, 0},
+    {"/fonts/mono-mu-500.ttf", "assets/fonts/mono-mu-500.ttf", "font/ttf", NULL, 0},
     {"/fonts/ibm-plex-mono-400.ttf", "assets/fonts/ibm-plex-mono-400.ttf", "font/ttf", NULL, 0},
     {"/fonts/ibm-plex-mono-500.ttf", "assets/fonts/ibm-plex-mono-500.ttf", "font/ttf", NULL, 0},
 };

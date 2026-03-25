@@ -17,8 +17,8 @@ This is a best-case local benchmark. It measures the server process, the kernel 
 
 | Route | Response bytes | Throughput | p50 | p95 | p99 | Max | Avg |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/` | 3143 | 18,548.54 req/s | 51 us | 69 us | 118 us | 978 us | 53.88 us |
-| `/healthz` | 126 | 18,449.30 req/s | 50 us | 62 us | 96 us | 9,945 us | 54.17 us |
+| `/` | 3143 | 18,548.54 req/s | 51 μs | 69 μs | 118 μs | 978 μs | 53.88 μs |
+| `/healthz` | 126 | 18,449.30 req/s | 50 μs | 62 μs | 96 μs | 9,945 μs | 54.17 μs |
 
 ## Plain-English Translation
 

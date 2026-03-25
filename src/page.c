@@ -8,6 +8,8 @@
 struct system_fact {
   const char *label;
   const char *value;
+  const char *detail;
+  bool wide;
 };
 
 struct dossier_metric {
@@ -50,9 +52,9 @@ struct dossier_entry {
 };
 
 static const struct system_fact SYSTEM_FACTS[] = {
-    {"Runtime", "Raw C"},
-    {"Serving", "Event-driven HTTP"},
-    {"Latency", "51 us p50 / 118 us p99 local loopback"},
+    {"Runtime", "Raw C", NULL, false},
+    {"Serving", "Event-driven HTTP", NULL, false},
+    {"Latency", "51 &#x03BC;s p50 / 118 &#x03BC;s p99", "Local loopback", true},
 };
 
 static const struct dossier ES_DOSSIER = {
@@ -110,8 +112,8 @@ static const struct dossier SITE_DOSSIER = {
     {
         {"Raw C", "Renderer + server"},
         {"poll", "Event loop"},
-        {"51 us", "p50 local"},
-        {"118 us", "p99 local"},
+        {"51 &#x03BC;s", "p50 local"},
+        {"118 &#x03BC;s", "p99 local"},
     },
     4,
     "Local loopback measurements only. Figures exclude WAN latency, TLS, browser rendering, CDN effects, and production contention.",
@@ -185,13 +187,23 @@ static size_t append_system_fact(
     size_t cap,
     size_t used,
     const struct system_fact *fact) {
-  return appendf(
+  const char *wide_class = fact->wide ? " system-fact-wide" : "";
+
+  used = appendf(
       out, cap, used,
-      "<div class=\"system-fact\">"
+      "<div class=\"system-fact%s\">"
       "<span class=\"system-label\">%s</span>"
       "<span class=\"system-value\">%s</span>"
-      "</div>",
-      fact->label, fact->value);
+      ,
+      wide_class, fact->label, fact->value);
+
+  if (has_text(fact->detail)) {
+    used = appendf(
+        out, cap, used, "<span class=\"system-detail\">%s</span>", fact->detail);
+  }
+
+  used = appendf(out, cap, used, "</div>");
+  return used;
 }
 
 static size_t append_project_card(
@@ -554,12 +566,18 @@ size_t render_portfolio_html(char *out, size_t out_cap) {
       "@font-face{font-family:'Bodoni Moda';src:url('fonts/bodoni-moda-400.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap;}"
       "@font-face{font-family:'Bodoni Moda';src:url('fonts/bodoni-moda-500.ttf') format('truetype');font-style:normal;font-weight:500;font-display:swap;}"
       "@font-face{font-family:'Bodoni Moda';src:url('fonts/bodoni-moda-600.ttf') format('truetype');font-style:normal;font-weight:600;font-display:swap;}"
+      "@font-face{font-family:'Mono Mu';src:url('fonts/mono-mu-400.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap;unicode-range:U+03BC;}"
+      "@font-face{font-family:'Mono Mu';src:url('fonts/mono-mu-500.ttf') format('truetype');font-style:normal;font-weight:500;font-display:swap;unicode-range:U+03BC;}"
       "@font-face{font-family:'IBM Plex Mono';src:url('fonts/ibm-plex-mono-400.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap;}"
       "@font-face{font-family:'IBM Plex Mono';src:url('fonts/ibm-plex-mono-500.ttf') format('truetype');font-style:normal;font-weight:500;font-display:swap;}"
+      );
+
+  used = appendf(
+      out, out_cap, used,
       ":root{--bg:#000000;--panel:#050505;--fg:#f5f5f5;--muted:#8c8c8c;"
       "--accent:#ffffff;--line:rgba(255,255,255,.12);--line-strong:rgba(255,255,255,.3);"
       "--font-display:'Bodoni Moda',Didot,'Times New Roman',serif;"
-      "--font-text:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;}"
+      "--font-text:'Mono Mu','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;}"
       "*{box-sizing:border-box}"
       "html{scroll-behavior:smooth}"
       "body{margin:0;padding:0;background:radial-gradient(circle at 50%% -10%%,rgba(255,255,255,.07),transparent 28%%),linear-gradient(180deg,#020202 0%%,var(--bg) 100%%);color:var(--fg);font-family:var(--font-text);font-size:14px;line-height:1.72;letter-spacing:.01em;}"
@@ -572,10 +590,12 @@ size_t render_portfolio_html(char *out, size_t out_cap) {
       ".hero{padding:46px 0 18px;}"
       ".kicker{margin:0 0 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}"
       "h1{margin:0;max-width:13ch;font-family:var(--font-display);font-size:clamp(2.5rem,5vw,3.8rem);line-height:.97;font-weight:500;letter-spacing:-.03em;color:var(--accent);}"
-      ".systems-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:30px;padding-top:14px;border-top:1px solid var(--line);}"
-      ".system-fact{padding-top:10px;border-top:1px solid var(--line);}"
+      ".systems-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:30px;padding-top:14px;border-top:1px solid var(--line);}"
+      ".system-fact{min-width:0;padding-top:10px;border-top:1px solid var(--line);}"
+      ".system-fact-wide{grid-column:span 2;}"
       ".system-label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}"
-      ".system-value{display:block;margin-top:8px;color:var(--fg);font-size:.92rem;}"
+      ".system-value{display:block;margin-top:8px;max-width:30ch;color:var(--fg);font-size:clamp(.88rem,1.35vw,.96rem);line-height:1.42;text-wrap:balance;font-variant-numeric:tabular-nums lining-nums;}"
+      ".system-detail{display:block;margin-top:6px;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}"
       ".section-head{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-top:22px;padding-bottom:12px;border-bottom:1px solid var(--line);}"
       ".section-head h2{margin:0;font-family:var(--font-display);font-size:1rem;font-weight:500;letter-spacing:0;color:var(--fg);}"
       ".footnote{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}"
@@ -654,7 +674,8 @@ size_t render_portfolio_html(char *out, size_t out_cap) {
       "::selection{background:var(--accent);color:#020202;}"
       "@keyframes rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}"
       "@keyframes targetCue{0%%{opacity:0}16%%{opacity:0}32%%{opacity:.82}54%%{opacity:.16}72%%{opacity:.52}100%%{opacity:0}}"
-      "@media (max-width:860px){.systems-bar,.projects,.dossier-body,.dossier-metrics{grid-template-columns:1fr;}.project-card,.project-card:first-child{grid-column:span 1;min-height:auto;}.project-record{grid-template-columns:1fr;gap:6px;}h1,.dossier-title{max-width:none;}.dossier-shell{left:8px;top:8px;width:calc(100vw - 16px);height:calc(100vh - 16px);}.dossier-content{padding:16px 16px 20px;}.dossier-rail{position:static;}}"
+      "@media (max-width:980px){.systems-bar{grid-template-columns:repeat(2,minmax(0,1fr));}.system-fact-wide{grid-column:span 2;}}"
+      "@media (max-width:860px){.systems-bar,.projects,.dossier-body,.dossier-metrics{grid-template-columns:1fr;}.system-fact-wide{grid-column:span 1;}.project-card,.project-card:first-child{grid-column:span 1;min-height:auto;}.project-record{grid-template-columns:1fr;gap:6px;}h1,.dossier-title{max-width:none;}.dossier-shell{left:8px;top:8px;width:calc(100vw - 16px);height:calc(100vh - 16px);}.dossier-content{padding:16px 16px 20px;}.dossier-rail{position:static;}}"
       "@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.site-main,.project-card,.dossier-backdrop,.dossier-content,.dossier-shell,.dossier-toc-link,.dossier-paper-section.is-targeted::before{transition:none;animation:none}}"
       "</style>"
       "</head>"
